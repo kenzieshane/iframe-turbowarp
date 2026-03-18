@@ -28,10 +28,10 @@
 
     getInfo() {
       return {
-        id: 'iframeTools',
-        name: 'Iframe Tools',
-        color1: '#4C97FF',
-        color2: '#3373CC',
+        id: 'ks-iframeTools',
+        name: 'KS Iframe',
+        color1: '#ffffff',
+        color2: '#ff0000',
         blocks: [
           {
             opcode: 'createIframe',
