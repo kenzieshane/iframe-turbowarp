@@ -37,8 +37,8 @@
       return {
         id: extensionId,
         name: 'KS Iframe',
-        color1: '#ffffff',
-        color2: '#ff0000',
+        color1: '#ff0000',
+        color2: '#803737',
         blocks: [
           {
             opcode: 'createIframe',
