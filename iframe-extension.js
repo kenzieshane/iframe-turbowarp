@@ -7,7 +7,7 @@
 
   const vm = Scratch.vm;
   const runtime = vm.runtime;
-  const extensionId = 'ks-iframeTools';
+  const extensionId = 'ksiframeTools';
 
   class IframeExtension {
     constructor() {
