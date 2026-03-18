@@ -7,19 +7,26 @@
 
   const vm = Scratch.vm;
   const runtime = vm.runtime;
+  const extensionId = 'ks-iframeTools';
 
   class IframeExtension {
     constructor() {
       this.iframe = null;
       this.container = null;
       this.visible = true;
+      this.lastIncomingMessage = '';
+      this.lastIncomingOrigin = '';
       this.state = {
         x: 0,
         y: 0,
         width: 480,
         height: 360,
-        url: 'https://example.org'
+        url: 'https://example.org',
+        targetOrigin: 'auto'
       };
+
+      this._onWindowMessage = this._onWindowMessage.bind(this);
+      window.addEventListener('message', this._onWindowMessage);
 
       runtime.on('PROJECT_STOP_ALL', () => {
         this.hideIframe();
@@ -28,7 +35,7 @@
 
     getInfo() {
       return {
-        id: 'ks-iframeTools',
+        id: extensionId,
         name: 'KS Iframe',
         color1: '#ffffff',
         color2: '#ff0000',
@@ -117,9 +124,51 @@
             text: 'remove iframe'
           },
           {
+            opcode: 'setIframeTargetOrigin',
+            blockType: Scratch.BlockType.COMMAND,
+            text: 'set iframe target origin [ORIGIN]',
+            arguments: {
+              ORIGIN: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: 'auto'
+              }
+            }
+          },
+          {
+            opcode: 'sendMessageToIframe',
+            blockType: Scratch.BlockType.COMMAND,
+            text: 'send message [MESSAGE] to iframe',
+            arguments: {
+              MESSAGE: {
+                type: Scratch.ArgumentType.STRING,
+                defaultValue: '{"type":"PING"}'
+              }
+            }
+          },
+          {
+            opcode: 'whenIframeMessageReceived',
+            blockType: Scratch.BlockType.HAT,
+            text: 'when iframe message received'
+          },
+          {
             opcode: 'iframeURL',
             blockType: Scratch.BlockType.REPORTER,
             text: 'iframe url'
+          },
+          {
+            opcode: 'iframeTargetOrigin',
+            blockType: Scratch.BlockType.REPORTER,
+            text: 'iframe target origin'
+          },
+          {
+            opcode: 'lastIframeMessage',
+            blockType: Scratch.BlockType.REPORTER,
+            text: 'last iframe message'
+          },
+          {
+            opcode: 'lastIframeMessageOrigin',
+            blockType: Scratch.BlockType.REPORTER,
+            text: 'last iframe message origin'
           },
           {
             opcode: 'iframeVisible',
@@ -177,6 +226,80 @@
     _toFiniteNumber(value, fallback) {
       const n = Number(value);
       return Number.isFinite(n) ? n : fallback;
+    }
+
+    _serializeData(data) {
+      if (typeof data === 'string') {
+        return data;
+      }
+
+      try {
+        return JSON.stringify(data);
+      } catch {
+        return String(data);
+      }
+    }
+
+    _parseMessagePayload(rawValue) {
+      const text = String(rawValue ?? '');
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return '';
+      }
+
+      const startsLikeJSON = (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+      );
+
+      if (!startsLikeJSON) {
+        return text;
+      }
+
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return text;
+      }
+    }
+
+    _defaultTargetOrigin() {
+      if (!this._isAllowedURL(this.state.url)) {
+        return '*';
+      }
+
+      try {
+        return new URL(this.state.url).origin;
+      } catch {
+        return '*';
+      }
+    }
+
+    _getTargetOrigin() {
+      if (this.state.targetOrigin === 'auto') {
+        return this._defaultTargetOrigin();
+      }
+
+      return this.state.targetOrigin || '*';
+    }
+
+    _onWindowMessage(event) {
+      if (!this.iframe || !this.iframe.contentWindow) {
+        return;
+      }
+
+      if (event.source !== this.iframe.contentWindow) {
+        return;
+      }
+
+      const expectedOrigin = this._getTargetOrigin();
+      if (expectedOrigin !== '*' && event.origin !== expectedOrigin) {
+        return;
+      }
+
+      this.lastIncomingOrigin = event.origin || '';
+      this.lastIncomingMessage = this._serializeData(event.data);
+      runtime.startHats(`${extensionId}_whenIframeMessageReceived`);
     }
 
     _applyLayout() {
@@ -283,8 +406,56 @@
       this.iframe = null;
     }
 
+    setIframeTargetOrigin(args) {
+      const input = String(args.ORIGIN || '').trim();
+
+      if (!input || input.toLowerCase() === 'auto') {
+        this.state.targetOrigin = 'auto';
+        return;
+      }
+
+      if (input === '*') {
+        this.state.targetOrigin = '*';
+        return;
+      }
+
+      try {
+        const parsed = new URL(input);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          this.state.targetOrigin = parsed.origin;
+        }
+      } catch {
+      }
+    }
+
+    sendMessageToIframe(args) {
+      if (!this._ensureIframe() || !this.iframe.contentWindow) {
+        return;
+      }
+
+      const payload = this._parseMessagePayload(args.MESSAGE);
+      const targetOrigin = this._getTargetOrigin();
+      this.iframe.contentWindow.postMessage(payload, targetOrigin);
+    }
+
+    whenIframeMessageReceived() {
+      return true;
+    }
+
     iframeURL() {
       return this.state.url;
+    }
+
+    iframeTargetOrigin() {
+      return this._getTargetOrigin();
+    }
+
+    lastIframeMessage() {
+      return this.lastIncomingMessage;
+    }
+
+    lastIframeMessageOrigin() {
+      return this.lastIncomingOrigin;
     }
 
     iframeVisible() {

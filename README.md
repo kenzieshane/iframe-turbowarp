@@ -24,7 +24,13 @@ This is a minimal custom TurboWarp extension that creates and controls an iframe
 - `show iframe`
 - `hide iframe`
 - `remove iframe`
+- `set iframe target origin [ORIGIN]`
+- `send message [MESSAGE] to iframe`
+- `when iframe message received`
 - `iframe url`
+- `iframe target origin`
+- `last iframe message`
+- `last iframe message origin`
 - `iframe is visible?`
 
 ## Notes
@@ -32,3 +38,23 @@ This is a minimal custom TurboWarp extension that creates and controls an iframe
 - Only `http://` and `https://` URLs are allowed.
 - Many websites block embedding via `X-Frame-Options` or CSP `frame-ancestors`.
 - On stop-all, the extension hides the iframe.
+- `iframe target origin` defaults to `auto` (derived from iframe URL origin).
+
+## Messaging flow (launcher ↔ game)
+
+In launcher (TurboWarp), use:
+
+- `set iframe target origin [ORIGIN]` (or keep `auto`)
+- `send message [MESSAGE] to iframe`
+- `when iframe message received` + `last iframe message`
+
+In the embedded game page, use browser JavaScript:
+
+```js
+window.addEventListener('message', (event) => {
+   if (event.origin !== 'https://your-launcher-origin.example') return;
+   // Handle message from launcher
+});
+
+window.parent.postMessage({ type: 'GAME_READY' }, 'https://your-launcher-origin.example');
+```
